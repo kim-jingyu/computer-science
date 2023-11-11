@@ -78,8 +78,11 @@ team_t team = {
 /* 
  * mm_init - initialize the malloc package.
  */
+static char *heap_listp;
 int mm_init(void)
 {
+    if((heap_listp = mem_sbrk(4*WSIZE)) == (void *)-1)
+        return -1;
     return 0;
 }
 
