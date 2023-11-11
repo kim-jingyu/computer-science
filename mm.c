@@ -57,7 +57,7 @@ team_t team = {
 
 /* Given block ptr bp, compute address of its header and footer */
 #define HDRP(bp) ((char *)(bp) - WSIZE)
-#define FTRP(bp) ((char *)(bp) + GET_SIZE(HDRP(bp)) - DSIZE) // 헤더+데이터+풋터 - (헤더+풋터)
+#define FTRP(bp) ((char *)(bp) + GET_SIZE(HDRP(bp)) - DSIZE) // 헤더+데이터+풋터 - (헤더+데이터)
 
 /* Given block ptr bp, compute address of next and previous blocks */
 /* 현재 block pointer에서 WSIZE를 빼서 header를 가리키게 하고, header에서 get size를 한다.
