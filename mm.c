@@ -161,6 +161,13 @@ void *mm_malloc(size_t size)
  */
 void mm_free(void *bp)
 {
+    // 해당 블록의 size를 찾고, header와 footer의 정보를 수집한다.
+    size_t size = GET_SIZE(bp);
+    PUT(HDRP(bp), PACK(size, 0));
+    PUT(FTRP(bp), PACK(size, 0));
+
+    // 만약 앞뒤 블록이 가용 상태면 연결한다.
+    coalesce(bp);
 }
 
 /*
@@ -202,4 +209,48 @@ static void *extend_heap(size_t words)
 
     // 만약 이전 블록이 가용 블록이라면 연결하고, 통합된 블록의 블록 포인터를 반환한다.
     return coalesce(bp);
+}
+
+/*
+ * coalesce - 해당 가용 블록을 앞뒤 가용 블록과 연결하고, 가용 블록의 주소를 리턴한다.
+ * bp 인자는 free 상태 블록의 payload를 가리키는 포인터이다.
+ */
+static void *coalesce(void *bp)
+{
+    size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp))); // 직전 블록의 헤더에서의 가용 여부
+    size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp))); // 직후 블록의 헤더에서의 가용 여부
+    size_t size = GET_SIZE(HDRP(bp));
+
+    // case1 - 직전, 직후 블록이 모두 할당되어 있는 경우. 연결이 불가능하므로 그대로 bp를 리턴한다.
+    if (prev_alloc && next_alloc)
+    {
+        return bp;
+    }
+
+    // case2 - 직전 블록 할당, 직후 블록이 가용인 경우.
+    else if (prev_alloc && !next_alloc)
+    {
+        size += GET_SIZE(HDRP(NEXT_BLKP(bp))); // 직후 블록 사이즈를 현재 블록 사이즈와 합친다.
+        PUT(HDRP(bp), PACK(size, 0));          // 현재 블록 헤더값을 갱신하고,
+        PUT(FTRP(bp), PACK(size, 0));          // 현재 블록 푸터값을 갱신하다.
+    }
+
+    // case3 - 직전 블록 가용, 직후 블록이 할당된 경우.
+    else if (!prev_alloc && next_alloc)
+    {
+        size += GET_SIZE(HDRP(PREV_BLKP(bp)));   // 직전 블록 사이즈를 현재 블록 사이즈와 합친다.
+        PUT(FTRP(bp), PACK(size, 0));            // 작전 블록 헤더값 갱신
+        PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0)); // 현재 블록 푸터값 갱신
+        bp = PREV_BLKP(bp);                      // 블록 포인터를 직전 블록으로 옮긴다.
+    }
+
+    // case4 - 직전, 직후 블록이 모두 가용인 경우.
+    else
+    {
+        size += GET_SIZE(HDRP(PREV_BLKP(bp)) + GET_SIZE(FTRP(NEXT_BLKP(bp))));
+        PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0)); // 직전 블록 헤더값 갱신
+        PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0)); // 직후 블록 푸터값 갱신
+        bp = PREV_BLKP(bp);                      // 블록 포인터를 직전 블록으로 옮긴다.
+    }
+    return bp; // 최종 가용 블록 주소를 반환한다.
 }
