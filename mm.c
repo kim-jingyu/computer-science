@@ -99,8 +99,22 @@ team_t team = {
 */
 static char *heap_listp;
 
+// 기본 함수 선언
+int mm_init(void);
+void *mm_malloc(size_t size);
+void mm_free(void *ptr);
+void *mm_realloc(void *ptr, size_t size);
+
+// 추가 함수 선언
+static void *extend_heap(size_t words);
+static void *coalesce(void *bp);
+static void *find_fit(size_t asize);
+static void place(void *bp, size_t newsize);
+
 /*
  * mm_init - initialize the malloc package.
+   mm_malloc, mm_free, mm_realloc을 실행하기 전에 초기화 해야하는 설정들을 넣는다.
+   함수 실행 도중 문제가 생긴다면 -1을 리턴하고, 정상적으로 종료되면 0을 리턴한다.
  */
 int mm_init(void)
 {
