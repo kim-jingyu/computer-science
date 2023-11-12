@@ -120,6 +120,22 @@ int mm_init(void)
 {
     if ((heap_listp = mem_sbrk(4 * WSIZE)) == (void *)-1)
         return -1;
+    /* mem_sbrk의 반환 값은 항상 새로 늘어난 힙의 첫 번째 주소를 가리킨다.
+       따라서 지금 주석을 작성하는 시점에서의 heap_listp는 초기화된 free list의 첫 번째 주소를 가리킨다.
+       이때, PUT 매크로는 주소 p가 가리키는 워드에 val을 저장하는 함수이다.
+    */
+    PUT(heap_listp, 0);                            // Alignment padding: 더블 워드 경계로 정렬된 미사용 패딩
+    PUT(heap_listp + (1 * WSIZE), PACK(DSIZE, 1)); // Prologue header
+    PUT(heap_listp + (1 * WSIZE), PACK(DSIZE, 1)); // Prologue footer
+    PUT(heap_listp + (3 * WSIZE), PACK(0, 1));     // Epilogue header
+    heap_listp += (2 * WSIZE);                     // 정적 전역 변수는 늘 prologue block을 가리킨다.
+
+    /* 이후에 CHUNKSIZE 만큼 힙을 확장해서 초기 가용 블록을 생성한다.
+       CHUNKSIZE는 바이트이기에 WSIZE로 나눠줘서 WORD 단위로 만든다.
+       따라서 extend_heap은 WORD 단위로 받는다.
+    */
+    if (extend_heap(CHUNKSIZE / WSIZE) == NULL)
+        return -1;
     return 0;
 }
 
