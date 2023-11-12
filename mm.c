@@ -159,7 +159,7 @@ void *mm_malloc(size_t size)
 /*
  * mm_free - Freeing a block does nothing.
  */
-void mm_free(void *ptr)
+void mm_free(void *bp)
 {
 }
 
@@ -181,4 +181,25 @@ void *mm_realloc(void *ptr, size_t size)
     memcpy(newptr, oldptr, copySize);
     mm_free(oldptr);
     return newptr;
+}
+
+static void *extend_heap(size_t words)
+{
+    char *bp;    // 블록 포인터 선언
+    size_t size; // 힙 영역의 크기를 담을 변수 선언
+
+    /* 더블 워드 정렬에 따라 메모리를 mem_sbrk 함수를 이용해 할당받음
+       여기서 더블 워드 정렬로 인해 늘 짝수 개수의 워드를 할당해주어야 한다.
+    */
+    size = (words % 2) ? (words + 1) * WSIZE : words * WSIZE; // size는 힙의 총 바이트 수이다. words가 홀수면 1을 더한 후에 4바이트를 곱하고, 짝수라면 그대로 4바이트를 곱해서 size에 저장한다.
+    if ((long)(bp = mem_sbrk(size) == -1))                    // 새 메모리의 첫 부분을 bp로 한다. 이때, 주소값은 long으로 캐스팅한다.
+        return NULL;
+
+    // 새 가용 블록의 header와 footer를 정해주고, epilogue block을 가용 블록 맨 끝으로 옮긴다.
+    PUT(HDRP(bp), PACK(size, 0));         // free block header
+    PUT(FTRP(bp), PACK(size, 0));         // free block footer
+    PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1)); // new epilogue header. 항상 size는 0, alloc은 1
+
+    // 만약 이전 블록이 가용 블록이라면 연결하고, 통합된 블록의 블록 포인터를 반환한다.
+    return coalesce(bp);
 }
