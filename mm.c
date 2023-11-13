@@ -120,6 +120,7 @@ void *mm_malloc(size_t size)
         return NULL;
     // 새 힙에 메모리를 할당한다.
     place(bp, asize);
+    last_bp = bp;
     return bp;
 }
 
@@ -202,6 +203,7 @@ static void *coalesce(void *bp)
         PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0)); // 직후 블록 푸터값 갱신
         bp = PREV_BLKP(bp);                      // 블록 포인터를 직전 블록으로 옮긴다.
     }
+    last_bp = bp;
     return bp; // 최종 가용 블록 주소를 반환한다.
 }
 
@@ -212,7 +214,7 @@ static void *find_fit(size_t asize)
     char *bp = last_bp;
 
     for (bp = NEXT_BLKP(bp); GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
-        if (GET_ALLOC(HDRP(bp)) == 0 && (asize <= GET_SIZE(HDRP(bp)))) {
+        if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
             // free 블록이고, asize보다 큰 블록은 last_bp에 저장한다.
             last_bp = bp;
             return bp;
@@ -224,7 +226,7 @@ static void *find_fit(size_t asize)
     while (bp < last_bp) {
         // 맨 처음부터 last_bp 전까지만 돌린다.
         bp = NEXT_BLKP(bp);
-        if (GET_ALLOC(HDRP(bp)) == 0 && GET_SIZE(HDRP(bp)) >= asize) {
+        if (!GET_ALLOC(HDRP(bp)) && GET_SIZE(HDRP(bp)) >= asize) {
             last_bp = bp;
             return bp;
         }
