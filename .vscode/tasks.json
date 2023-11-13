@@ -23,6 +23,17 @@
 				"isDefault": true
 			},
 			"detail": "compiler: /usr/bin/gcc"
+		},
+		{
+			"label": "mdriver",
+			"command": "make",
+			"args": [""],
+			"type": "shell",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": []
 		}
 	]
 }
