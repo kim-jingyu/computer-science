@@ -46,7 +46,7 @@ team_t team = {
 #define GET(p)      (*(unsigned int *)(p))         // p가 가리키는 곳의 값을 가져옴
 #define PUT(p, val) (*(unsigned int *)(p) = (val)) // p가 가리키는 곳에 val를 넣음
 
-#define GET_SIZE(p)  a(GET(p) & ~0x7)
+#define GET_SIZE(p)  (GET(p) & ~0x7)
 #define GET_ALLOC(p) (GET(p) & 0x1)
 
 #define HDRP(bp) ((char *)(bp) - WSIZE)
@@ -108,8 +108,7 @@ void *mm_malloc(size_t size)
         asize = DSIZE * ((size + (DSIZE) + (DSIZE - 1)) / DSIZE);
 
     // 가용 리스트에서 적합한 자리를 찾는다.
-    if ((bp = find_fit(asize)) != NULL)
-    {
+    if ((bp = find_fit(asize)) != NULL) {
         place(bp, asize);
         return bp;
     }
@@ -144,7 +143,8 @@ void *mm_realloc(void *ptr, size_t size)
     newptr = mm_malloc(size);
     if (newptr == NULL)
         return NULL;
-    copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
+    
+    copySize = GET_SIZE(HDRP(oldptr));
     if (size < copySize)
         copySize = size;
     memcpy(newptr, oldptr, copySize);
@@ -180,33 +180,23 @@ static void *coalesce(void *bp)
     size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp))); // 직후 블록의 헤더에서의 가용 여부
     size_t size = GET_SIZE(HDRP(bp));
 
-    // case1 - 직전, 직후 블록이 모두 할당되어 있는 경우. 연결이 불가능하므로 그대로 bp를 리턴한다.
-    if (prev_alloc && next_alloc)
-    {
+    if (prev_alloc && next_alloc) {
+        // case1 - 직전, 직후 블록이 모두 할당되어 있는 경우. 연결이 불가능하므로 그대로 bp를 리턴한다.
         return bp;
-    }
-
-    // case2 - 직전 블록 할당, 직후 블록이 가용인 경우.
-    else if (prev_alloc && !next_alloc)
-    {
+    } else if (prev_alloc && !next_alloc) {
+        // case2 - 직전 블록 할당, 직후 블록이 가용인 경우.
         size += GET_SIZE(HDRP(NEXT_BLKP(bp))); // 직후 블록 사이즈를 현재 블록 사이즈와 합친다.
         PUT(HDRP(bp), PACK(size, 0));          // 현재 블록 헤더값을 갱신하고,
         PUT(FTRP(bp), PACK(size, 0));          // 현재 블록 푸터값을 갱신하다.
-    }
-
-    // case3 - 직전 블록 가용, 직후 블록이 할당된 경우.
-    else if (!prev_alloc && next_alloc)
-    {
+    } else if (!prev_alloc && next_alloc) {
+        // case3 - 직전 블록 가용, 직후 블록이 할당된 경우.
         size += GET_SIZE(HDRP(PREV_BLKP(bp)));   // 직전 블록 사이즈를 현재 블록 사이즈와 합친다.
-        PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0)); // 현재 블록 헤더값 갱신
         PUT(FTRP(bp), PACK(size, 0));            // 작전 블록 푸터값 갱신
+        PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0)); // 현재 블록 헤더값 갱신
         bp = PREV_BLKP(bp);                      // 블록 포인터를 직전 블록으로 옮긴다.
-    }
-
-    // case4 - 직전, 직후 블록이 모두 가용인 경우.
-    else
-    {
-        size += GET_SIZE(HDRP(PREV_BLKP(bp)) + GET_SIZE(FTRP(NEXT_BLKP(bp))));
+    } else {
+        // case4 - 직전, 직후 블록이 모두 가용인 경우.
+        size += GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(FTRP(NEXT_BLKP(bp)));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0)); // 직전 블록 헤더값 갱신
         PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0)); // 직후 블록 푸터값 갱신
         bp = PREV_BLKP(bp);                      // 블록 포인터를 직전 블록으로 옮긴다.
@@ -219,10 +209,8 @@ static void *find_fit(size_t asize)
 {
     void *bp;
 
-    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp))
-    {
-        if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp))))
-        {
+    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
+        if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
             return bp;
         }
     }
@@ -233,19 +221,15 @@ static void place(void *bp, size_t asize)
 {
     size_t csize = GET_SIZE(HDRP(bp));
 
-    // 분할이 가능한 경우
-    if ((csize - asize) >= (2 * DSIZE))
-    {
+    if ((csize - asize) >= (2 * DSIZE)) {
+        // 분할이 가능한 경우
         PUT(HDRP(bp), PACK(asize, 1));
         PUT(FTRP(bp), PACK(asize, 1));
         bp = NEXT_BLKP(bp);
         PUT(HDRP(bp), PACK(csize - asize, 0));
         PUT(FTRP(bp), PACK(csize - asize, 0));
-    }
-
-    // 분할할 수 없다면 남은 부분은 padding
-    else
-    {
+    } else {
+        // 분할할 수 없다면 남은 부분은 padding
         PUT(HDRP(bp), PACK(csize, 1));
         PUT(FTRP(bp), PACK(csize, 1));
     }
