@@ -46,8 +46,8 @@ team_t team = {
 #define GET(p)      (*(unsigned int *)(p))         // p가 가리키는 곳의 값을 가져옴
 #define PUT(p, val) (*(unsigned int *)(p) = (val)) // p가 가리키는 곳에 val를 넣음
 
-#define GET_SIZE(p)  (GET(p) & ~0x7)
-#define GET_ALLOC(p) (GET(p) & 0x1)
+#define GET_SIZE(p)  (GET(p) & ~0x7)    // 사이즈 확인
+#define GET_ALLOC(p) (GET(p) & 0x1)     // 할당 비트 확인
 
 #define HDRP(bp) ((char *)(bp) - WSIZE)
 #define FTRP(bp) ((char *)(bp) + GET_SIZE(HDRP(bp)) - DSIZE) // 헤더+데이터+풋터 - (헤더+데이터)
