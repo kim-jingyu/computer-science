@@ -43,17 +43,17 @@ team_t team = {
 
 #define PACK(size, alloc) ((size) | (alloc))
 
-#define GET(p) (*(unsigned int *)(p))              // p가 가리키는 곳의 값을 가져옴
+#define GET(p)      (*(unsigned int *)(p))         // p가 가리키는 곳의 값을 가져옴
 #define PUT(p, val) (*(unsigned int *)(p) = (val)) // p가 가리키는 곳에 val를 넣음
 
-#define GET_SIZE(p) (GET(p) & ~0x7)
+#define GET_SIZE(p)  a(GET(p) & ~0x7)
 #define GET_ALLOC(p) (GET(p) & 0x1)
 
-#define HDRP(bp) ((char *)(bp)-WSIZE)
+#define HDRP(bp) ((char *)(bp) - WSIZE)
 #define FTRP(bp) ((char *)(bp) + GET_SIZE(HDRP(bp)) - DSIZE) // 헤더+데이터+풋터 - (헤더+데이터)
 
-#define NEXT_BLKP(bp) ((char *)(bp) + GET_SIZE(((char *)(bp)-WSIZE)))
-#define PREV_BLKP(bp) ((char *)(bp)-GET_SIZE(((char *)(bp)-DSIZE)))
+#define NEXT_BLKP(bp) ((char *)(bp) + GET_SIZE(((char *)(bp) - WSIZE)))
+#define PREV_BLKP(bp) ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 
 #define ALIGNMENT 8
 
@@ -82,7 +82,7 @@ int mm_init(void)
 
     PUT(heap_listp, 0);                            // Alignment padding: 더블 워드 경계로 정렬된 미사용 패딩
     PUT(heap_listp + (1 * WSIZE), PACK(DSIZE, 1)); // Prologue header
-    PUT(heap_listp + (1 * WSIZE), PACK(DSIZE, 1)); // Prologue footer
+    PUT(heap_listp + (2 * WSIZE), PACK(DSIZE, 1)); // Prologue footer
     PUT(heap_listp + (3 * WSIZE), PACK(0, 1));     // Epilogue header
     heap_listp += (2 * WSIZE);                     // 정적 전역 변수는 늘 prologue block을 가리킨다.
 
@@ -93,27 +93,33 @@ int mm_init(void)
 
 void *mm_malloc(size_t size)
 {
-    size_t asize;
-    size_t extendsize;
+    size_t asize;   // 정렬 조건과 헤더 및 푸터를 고려하여 조정된 사이즈
+    size_t extendsize;  // 메모리를 할당할 자리가 없을 때(no-fit일 때), 힙을 연장할 크기
     char *bp;
 
+    // 가짜 요청 spurious request 무시
     if (size == 0)
         return NULL;
 
-    if (size <= DSIZE)
-        asize = 2 * DSIZE;
+    if (size <= DSIZE)      // 정렬 조건 및 오버헤드를 고려하여 블록 사이즈를 조정한다.
+        asize = 2 * DSIZE;  // 요청받은 크기가 8바이트보다 작으면 asize를 16바이트로 만든다.
     else
+        // 요청받은 크기가 8바이트 보다 작으면, 사이에 8바이트를 더하고, 다시 7을 더해서 8로 나눈 몫에 8을 곱한다.
         asize = DSIZE * ((size + (DSIZE) + (DSIZE - 1)) / DSIZE);
 
+    // 가용 리스트에서 적합한 자리를 찾는다.
     if ((bp = find_fit(asize)) != NULL)
     {
         place(bp, asize);
         return bp;
     }
 
+    // 만약 맞는 크기의 가용 블록이 없으면, 새로 힙을 늘려서 둘 중에 더 큰 값으로 사이즈를 정한다.
     extendsize = MAX(asize, CHUNKSIZE);
+    // extend_heap()은 word 단위롤 인자를 받으므로 WSIZE로 나눠준다.
     if ((bp = extend_heap(extendsize / WSIZE)) == NULL)
         return NULL;
+    // 새 힙에 메모리를 할당한다.
     place(bp, asize);
     return bp;
 }
@@ -121,7 +127,7 @@ void *mm_malloc(size_t size)
 void mm_free(void *bp)
 {
     // 해당 블록의 size를 찾고, header와 footer의 정보를 수집한다.
-    size_t size = GET_SIZE(bp);
+    size_t size = GET_SIZE(HDRP(bp));
     PUT(HDRP(bp), PACK(size, 0));
     PUT(FTRP(bp), PACK(size, 0));
 
@@ -192,8 +198,8 @@ static void *coalesce(void *bp)
     else if (!prev_alloc && next_alloc)
     {
         size += GET_SIZE(HDRP(PREV_BLKP(bp)));   // 직전 블록 사이즈를 현재 블록 사이즈와 합친다.
-        PUT(FTRP(bp), PACK(size, 0));            // 작전 블록 헤더값 갱신
-        PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0)); // 현재 블록 푸터값 갱신
+        PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0)); // 현재 블록 헤더값 갱신
+        PUT(FTRP(bp), PACK(size, 0));            // 작전 블록 푸터값 갱신
         bp = PREV_BLKP(bp);                      // 블록 포인터를 직전 블록으로 옮긴다.
     }
 
