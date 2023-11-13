@@ -34,34 +34,27 @@ team_t team = {
     /* Second member's email address (leave blank if none) */
     ""};
 
-/* 기본 size 상수 정의 */
-#define WSIZE 4             // 워드, 헤더, 풋터 size (bytes)
-#define DSIZE 8             // 더블 워드 size (bytes)
-#define CHUNKSIZE (1 << 12) // 힙을 이만큼 늘린다는 의미 (bytes)
+#define WSIZE       4           // 워드, 헤더, 풋터 size (bytes)
+#define DSIZE       8           // 더블 워드 size (bytes)
+#define CHUNKSIZE   (1 << 12)   // 힙을 이만큼 늘린다는 의미 (bytes)
 
-#define MAX(x, y) ((x) > (y) ? (x) : (y))
+#define MAX(x, y)   ((x) > (y) ? (x) : (y))
 
-#define PACK(size, alloc) ((size) | (alloc))
+#define PACK(size, alloc)   ((size) | (alloc))
 
-#define GET(p)      (*(unsigned int *)(p))         // p가 가리키는 곳의 값을 가져옴
+#define GET(p)  (*(unsigned int *)(p))         // p가 가리키는 곳의 값을 가져옴
 #define PUT(p, val) (*(unsigned int *)(p) = (val)) // p가 가리키는 곳에 val를 넣음
 
-#define GET_SIZE(p)  (GET(p) & ~0x7)    // header와 footer의 사이즈 확인(8의 배수)
-#define GET_ALLOC(p) (GET(p) & 0x1)     // 현재 블록 가용 여부 확인(0이면 alloc, 1이면 free)
+#define GET_SIZE(p)     (GET(p) & ~0x7)    // header와 footer의 사이즈 확인(8의 배수)
+#define GET_ALLOC(p)    (GET(p) & 0x1)     // 현재 블록 가용 여부 확인(1이면 alloc, 0이면 free)
 
 // bp. 즉, 현재 블록의 포인터로 현재 블록의 header 위치와 footer 위치를 반환
-#define HDRP(bp) ((char *)(bp) - WSIZE)
-#define FTRP(bp) ((char *)(bp) + GET_SIZE(HDRP(bp)) - DSIZE) // 헤더+데이터+풋터 - (헤더+데이터)
+#define HDRP(bp)    ((char *)(bp) - WSIZE)
+#define FTRP(bp)    ((char *)(bp) + GET_SIZE(HDRP(bp)) - DSIZE)
 
 // 다음과 이전 블록의 포인터 반환
-#define NEXT_BLKP(bp) ((char *)(bp) + GET_SIZE(((char *)(bp) - WSIZE))) // bp + 현재 블록의 크기
-#define PREV_BLKP(bp) ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE))) // bp - 이전 블록의 크기
-
-#define ALIGNMENT 8
-
-#define ALIGN(size) (((size) + (ALIGNMENT - 1)) & ~0x7)
-
-#define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
+#define NEXT_BLKP(bp)   (((char *)(bp) + GET_SIZE((char *)(bp) - WSIZE))) // bp + 현재 블록의 크기
+#define PREV_BLKP(bp)   (((char *)(bp) - GET_SIZE((char *)(bp) - DSIZE))) // bp - 이전 블록의 크기
 
 // 기본 함수 선언
 int mm_init(void);
@@ -212,18 +205,31 @@ static void *coalesce(void *bp)
     return bp; // 최종 가용 블록 주소를 반환한다.
 }
 
-/* first-fit */
+/* next-fit */
 static void *find_fit(size_t asize)
 {
-    char *bp;
+    // init할 때, 이미 last_bp를 설정하기 때문에 bp에 그 값을 넣어준다.
+    char *bp = last_bp;
 
-    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp))
-    {
-        if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp))))
-        {
+    for (bp = NEXT_BLKP(bp); GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
+        if (GET_ALLOC(HDRP(bp)) == 0 && (asize <= GET_SIZE(HDRP(bp)))) {
+            // free 블록이고, asize보다 큰 블록은 last_bp에 저장한다.
+            last_bp = bp;
             return bp;
         }
     }
+
+    // 위에서 반환되지 않았으면, 마지막 last_bp부터 돌렸을 때, 끝까지 갔는데 fit을 찾을 수 없다는 뜻이고, 그럼 맨 처음부터 중간에 free된 블럭을 찾아야 한다.
+    bp = heap_listp;
+    while (bp < last_bp) {
+        // 맨 처음부터 last_bp 전까지만 돌린다.
+        bp = NEXT_BLKP(bp);
+        if (GET_ALLOC(HDRP(bp)) == 0 && GET_SIZE(HDRP(bp)) >= asize) {
+            last_bp = bp;
+            return bp;
+        }
+    }
+    
     return NULL; // No fit
 }
 
