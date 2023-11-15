@@ -161,19 +161,16 @@ void *mm_realloc(void *ptr, size_t size)
         return 0;
     }
 
-    /* 새 블록에 할당 */
     void *newptr = mm_malloc(size); // 새로 할당한 블록의 포인터
     if (newptr == NULL)
         return NULL; // 할당 실패
 
-    /* 데이터 복사 */
-    size_t copySize = GET_SIZE(HDRP(ptr)) - DSIZE; // payload만큼 복사
-    if (size < copySize)                           // 기존 사이즈가 새 크기보다 더 크면
-        copySize = size;                           // size로 크기 변경 (기존 메모리 블록보다 작은 크기에 할당하면, 일부 데이터만 복사)
+    size_t copySize = GET_SIZE(HDRP(ptr)) - DSIZE;
+    if (size < copySize)
+        copySize = size;
 
-    memcpy(newptr, ptr, copySize); // 새 블록으로 데이터 복사
+    memcpy(newptr, ptr, copySize);
 
-    /* 기존 블록 반환 */
     mm_free(ptr);
     
     return newptr;
