@@ -140,54 +140,28 @@ void mm_free(void *ptr) {
     coalesce(ptr);
 }
 
-void *mm_realloc(void *bp, size_t size) {
-    // if (ptr == NULL) {
-    //     return mm_malloc(size);
-    // }
-
-    // if (size == 0) {
-    //     mm_free(ptr);
-    //     return;
-    // }
-
-    // void *new_ptr = mm_malloc(size);
-    // if (new_ptr == NULL) {
-    //     return NULL;
-    // }
-
-    // size_t entire_size = GET_SIZE(HDRP(ptr));
-    // if (size < entire_size) {
-    //     entire_size = size;
-    // }
-    // memcpy(new_ptr, ptr, entire_size);  // ptr 위치에서 entire_size 만큼의 크기를 new_ptr에 복사
-    // mm_free(ptr);   // 기존 메모리는 할당 해제
-    // return new_ptr;
-    size_t old_size = GET_SIZE(HDRP(bp));
+void *mm_realloc(void *ptr, size_t size) {
+    size_t old_size = GET_SIZE(HDRP(ptr));
     size_t new_size = size + (2 * WSIZE);
+    size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(ptr)));
+    size_t current_size = old_size + GET_SIZE(HDRP(NEXT_BLKP(ptr)));
 
-    // new_size가 old_size보다 작거나 같으면 기존 bp 그대로 사용
+    // new_size가 old_size보다 작거나 같으면 기존 블록 포인터 그대로 사용
     if (new_size <= old_size) {
-        return bp;
+        return ptr;
     }
-    // new_size가 old_size보다 크면 사이즈 변경
-    else {
-        size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
-        size_t current_size = old_size + GET_SIZE(HDRP(NEXT_BLKP(bp)));
 
-        // next block이 free 상태이고 old, next block의 사이즈 합이 new_size보다 크면, next block에 합쳐서 사용
-        if (!next_alloc && current_size >= new_size) {
-            PUT(HDRP(bp), PACK(current_size, 1));
-            PUT(FTRP(bp), PACK(current_size, 1));
-            return bp;
-        }
-        // 아니면 새로 block 만들어서 거기로 옮기기
-        else {
-            void *new_bp = mm_malloc(new_size);
-            place(new_bp, new_size);
-            memcpy(new_bp, bp, new_size);  // old_bp로부터 new_size만큼의 문자를 new_bp로 복사하는 함수
-            mm_free(bp);
-            return new_bp;
-        }
+    // next block이 free 상태이고 old, next block의 사이즈 합이 new_size보다 크면, next block에 합쳐서 사용
+    if (!next_alloc && current_size >= new_size) {
+        PUT(HDRP(ptr), PACK(current_size, 1));
+        PUT(FTRP(ptr), PACK(current_size, 1));
+        return ptr;
+    } else {
+        void *new_ptr = mm_malloc(new_size);
+        place(new_ptr, new_size);
+        memcpy(new_ptr, ptr, new_size); // ptr 위치에서 new_size만큼의 크기를 new_ptr의 위치에 복사함
+        mm_free(ptr);
+        return new_ptr;
     }
 }
 
