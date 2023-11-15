@@ -34,27 +34,30 @@ team_t team = {
     /* Second member's email address (leave blank if none) */
     ""};
 
-#define WSIZE       4           // 워드, 헤더, 풋터 size (bytes)
-#define DSIZE       8           // 더블 워드 size (bytes)
-#define CHUNKSIZE   (1 << 12)   // 힙을 이만큼 늘린다는 의미 (bytes)
+#define WSIZE       4           // 워드 사이즈
+#define DSIZE       8           // 더블 워드 사이즈
+#define CHUNKSIZE   (1 << 12)   // 초기 가용 블록과 힙 확장을 위한 기본 크기
 
 #define MAX(x, y)   ((x) > (y) ? (x) : (y))
 
+// 사이즈와 할당 비트를 합쳐서 header, footer에 저장할 수 있는 값 반환
 #define PACK(size, alloc)   ((size) | (alloc))
 
-#define GET(p)  (*(unsigned int *)(p))         // p가 가리키는 곳의 값을 가져옴
-#define PUT(p, val) (*(unsigned int *)(p) = (val)) // p가 가리키는 곳에 val를 넣음
+// 특정 주소 p에 워드 읽고, 쓰기
+#define GET(p)  (*(unsigned int *)(p))
+#define PUT(p, val) (*(unsigned int *)(p) = (val))
 
-#define GET_SIZE(p)     (GET(p) & ~0x7)    // header와 footer의 사이즈 확인(8의 배수)
-#define GET_ALLOC(p)    (GET(p) & 0x1)     // 현재 블록 가용 여부 확인(1이면 alloc, 0이면 free)
+// 특정 주소 p에 해당하는 블록의 사이즈와 가용 여부 반환
+#define GET_SIZE(p)     (GET(p) & ~0x7)
+#define GET_ALLOC(p)    (GET(p) & 0x1)
 
-// bp. 즉, 현재 블록의 포인터로 현재 블록의 header 위치와 footer 위치를 반환
+// 특정 주소 p에 해당하는 블록의 header, footer의 포인터 주소 반환
 #define HDRP(bp)    ((char *)(bp) - WSIZE)
 #define FTRP(bp)    ((char *)(bp) + GET_SIZE(HDRP(bp)) - DSIZE)
 
-// 다음과 이전 블록의 포인터 반환
-#define NEXT_BLKP(bp)   (((char *)(bp) + GET_SIZE((char *)(bp) - WSIZE))) // bp + 현재 블록의 크기
-#define PREV_BLKP(bp)   (((char *)(bp) - GET_SIZE((char *)(bp) - DSIZE))) // bp - 이전 블록의 크기
+// 다음, 이전 블록의 헤더 이후의 시작 위치의 포인터 주소 반환
+#define NEXT_BLKP(bp)   (((char *)(bp) + GET_SIZE((char *)(bp) - WSIZE)))
+#define PREV_BLKP(bp)   (((char *)(bp) - GET_SIZE((char *)(bp) - DSIZE)))
 
 // 기본 함수 선언
 int mm_init(void);
