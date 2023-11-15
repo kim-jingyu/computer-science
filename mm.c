@@ -52,12 +52,12 @@ team_t team = {
 #define GET_ALLOC(p)    (GET(p) & 0x1)
 
 // 특정 주소 p에 해당하는 블록의 header, footer의 포인터 주소 반환
-#define HDRP(bp)    ((char *)(bp) - WSIZE)
-#define FTRP(bp)    ((char *)(bp) + GET_SIZE(HDRP(bp)) - DSIZE)
+#define HDRP(p)    ((char *)(p) - WSIZE)
+#define FTRP(p)    ((char *)(p) + GET_SIZE(HDRP(bp)) - DSIZE)
 
 // 다음, 이전 블록의 헤더 이후의 시작 위치의 포인터 주소 반환
-#define NEXT_BLKP(bp)   (((char *)(bp) + GET_SIZE((char *)(bp) - WSIZE)))
-#define PREV_BLKP(bp)   (((char *)(bp) - GET_SIZE((char *)(bp) - DSIZE)))
+#define NEXT_BLKP(ptr)   (((char *)(ptr) + GET_SIZE((char *)(ptr) - WSIZE)))
+#define PREV_BLKP(ptr)   (((char *)(ptr) - GET_SIZE((char *)(ptr) - DSIZE)))
 
 // 기본 함수 선언
 int mm_init(void);
