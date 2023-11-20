@@ -228,3 +228,18 @@ void serve_static(int fd, char *filename, int filesize) {
   Rio_writen(fd, srcp, filesize); // 해당 메모리에 있는 파일 내용들을 fd에 보낸다.(=읽는다)
   Munmap(srcp, filesize);
 }
+
+// Response header의 Conten-Type에 필요한 함수로, filename을 조사해서 각각의 식별자에 맞는 MIME 타입을 filetype에 입력해준다.
+void get_filetype(char *filename, char *filetype) {
+  if (strstr(filename, ".html")) {
+    strcpy(filename, "text/html");
+  } else if (strstr(filename, ".gif")) {
+    strcpy(filename, "image/gif");
+  } else if (strstr(filename, ".png")) {
+    strcpy(filename, "iamge/png");
+  } else if (strstr(filename, "jpg")) {
+    strcpy(filename, "image/jpeg");
+  } else {
+    strcpy(filename, "text/plain");
+  }
+}
