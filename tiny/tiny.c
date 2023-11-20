@@ -144,3 +144,60 @@ void read_requesthdrs(rio_t *rp) {
   }
   return;
 }
+
+// uri를 받아서 요청받은 파일의 이름과 요청 인자를 채워준다.
+int parse_uri(char *uri, char *filename, char *cgiargs) {
+  char *ptr;
+
+  // uri에 cgi-bin이 없다면, 즉 정적 컨텐츠를 요청한다면 1을 반환한다.
+  // 예) GET /hi.jpg HTTP/1.1 --> uri에 cgi-bin이 없음
+
+  /*
+    static-content. 즉, uri안에 "cgi-bin"과 일치하는 문자열이 없음
+
+    예시)
+    uri : /hi.jpg
+    ->
+    cgiargs :
+    filename : ./hi.jpg
+  */
+  if (!strstr(uri, "cgi-bin")) {
+    strcpy(cgiargs, "");    // 정적 컨텐츠이므로, cgiargs에는 아무것도 없다.
+    strcpy(filename, ".");  // 현재 경로에서부터 시작한다. ./path ~~
+    strcat(filename, uri);  // filename 스트링에 uri 스트링을 이어붙인다.
+
+    // 만약 uri뒤에 '/'이 있으면, 그 뒤에 home.html을 붙인다.
+    if (uri[strlen(uri)-1] == '/') {
+      strcat(filename, "home.html");
+    }
+
+    // 정적 컨텐츠이면 1을 반환한다.
+    return 1;
+  } 
+  /*
+    dynamic-content
+
+    예시)
+    uri : /cgi-bin/adder?123&123
+    ->
+    cgiargs : 123&123
+    filename : ./cgi-bin/adder
+  */
+  else {
+    ptr = index(uri, '?');
+
+    // '?'이 있으면 cgiargs를 '?' 뒤의 인자들과 값으로 채워주고, '?'를 NULL으로 만든다.
+    if (ptr) {
+      strcpy(cgiargs, ptr + 1);
+      *ptr = '\0';
+    } else {
+      // '?'이 없으면 아무것도 안넣어준다.
+      strcpy(cgiargs, "");
+    }
+
+    strcpy(filename, '.');  // 현재 디렉토리에서 시작한다.
+    strcat(filename, uri);  // uri를 넣어준다.
+  }
+
+  return 0;
+}
