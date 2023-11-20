@@ -130,3 +130,17 @@ void clienterror(int fd, char *cause, char *errnum, char *shortmsg, char *longms
   Rio_writen(fd, buf, strlen(buf));
   Rio_writen(fd, body, strlen(body));
 }
+
+// 클라이언트가 버퍼 rp에 보낸 나머지 요청 헤더들을 무시
+void read_requesthdrs(rio_t *rp) {
+  char buf[MAXLINE];
+
+  Rio_readlineb(rp, buf, MAXLINE);
+
+  // 버퍼 rp의 마지막 끝을 만날 때까지(Content-Length의 마지막 \r\n) 계속 출력해줘서 없앤다.
+  while (strcmp(buf, "\r\n")) {
+    Rio_readlineb(rp, buf, MAXLINE);
+    printf("%s", buf);
+  }
+  return;
+}
