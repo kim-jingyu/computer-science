@@ -194,11 +194,11 @@ int parse_uri(char *uri, char *filename, char *cgiargs) {
       strcpy(cgiargs, "");
     }
 
-    strcpy(filename, '.');  // 현재 디렉토리에서 시작한다.
+    strcpy(filename, ".");  // 현재 디렉토리에서 시작한다.
     strcat(filename, uri);  // uri를 넣어준다.
-  }
 
-  return 0;
+    return 0;
+  }
 }
 
 void serve_static(int fd, char *filename, int filesize) {
