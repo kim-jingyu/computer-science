@@ -214,7 +214,7 @@ void serve_static(int fd, char *filename, int filesize) {
   sprintf(buf, "%sServer : Tiny Web Server\r\n", buf);  // 응답 헤더 작성하기
   sprintf(buf, "%sConnection : close\r\n");
   sprintf(buf, "%sContent-Length : %d\r\n", buf, filesize);
-  sprintf(buf, "%sContent-Type : %s\r\n", buf, filetype);
+  sprintf(buf, "%sContent-Type : %s\r\n\r\n", buf, filetype);
 
   // 응답 라인과 헤더를 클라이언트에게 보낸다.
   Rio_writen(fd, buf, strlen(buf)); // connfd를 통해서 clientfd에게 보낸다.
