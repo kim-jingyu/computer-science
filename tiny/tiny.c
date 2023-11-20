@@ -243,3 +243,23 @@ void get_filetype(char *filename, char *filetype) {
     strcpy(filename, "text/plain");
   }
 }
+
+// 클라이언트가 원하는 동적 컨텐츠 디렉토리를 받아온다. 응답 라인과 헤더를 작성하고 서버에게 보내면, CGI 자식 프로세스를 fork하고, 그 프로세스의 표준 출력을 클라이언트 출력과 연결한다.
+void serve_dynamic(int fd, char *filename, char *cgiargs) {
+  char buf[MAXLINE], *emptylist[] = { NULL };
+
+  // return first part of HTTP response
+  sprintf(buf, "HTTP/1.0 200 OK\r\n");
+  Rio_writen(fd, buf, strlen(buf));
+  sprintf(buf, "Server: Tiny Web Server\r\n");
+  Rio_writen(fd, buf, strlen(buf));
+
+  if (Fork() == 0) {
+    setenv("QUERY_STRING", cgiargs, 1);
+
+    // 클라이언트의 표준 출력을 CGI 프로그램의 표준 출력과 연결한다. 따라서 앞으로 CGI 프로그램에서 printf하면 클라이언트에서 출력된다.
+    Dup2(fd, STDOUT_FILENO);
+    Execve(filename, emptylist, environ);
+  }
+  Wait(NULL);
+}
