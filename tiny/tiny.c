@@ -12,9 +12,9 @@
 void doit(int fd);
 void read_requesthdrs(rio_t *rp);
 int parse_uri(char *uri, char *filename, char *cgiargs);
-void serve_static(int fd, char *filename, int filesize);
+void serve_static(int fd, char *filename, int filesize, char *method);
 void get_filetype(char *filename, char *filetype);
-void serve_dynamic(int fd, char *filename, char *cgiargs);
+void serve_dynamic(int fd, char *filename, char *cgiargs, char *method);
 void clienterror(int fd, char *cause, char *errnum, char *shortmsg,
                  char *longmsg);
 
@@ -70,8 +70,8 @@ void doit(int fd) {
   printf("%s", buf);  // 요청 라인 buf = "GET /hi HTTP/1.1\0"을 표준 출력해준다.
   sscanf(buf, "%s %s %s", method, uri, version);  // buf에서 문자열 3개를 읽어와서 method, uri, version이라는 문자열에 저장한다.
 
-  // 요청 method가 GET이 아니면 종료한다. 즉, main으로 가서 연결을 닫고, 다음 요청을 기다린다.
-  if (strcasecmp(method, "GET")) {
+  // 요청 method가 GET, HEAD이 아니면 종료한다. 즉, main으로 가서 연결을 닫고, 다음 요청을 기다린다.
+  if (!(strcasecmp(method, "HEAD") || strcasecmp(method, "GET"))) {
     clienterror(fd, method, "501", "Not implemented", "Tiny does not implement this method");
     return;
   }
@@ -95,16 +95,16 @@ void doit(int fd) {
       clienterror(fd, filename, "403", "Forbidden", "Tiny couldn't read the file");
       return;
     }
-    // reponse header의 content-length를 위해 정적 서버에 파일의 사이즈를 같이 보낸다
-    serve_static(fd, filename, sbuf.st_size);
+    // reponse header의 content-length를 위해 정적 서버에 파일의 사이즈를 같이 보낸다 + 메서드 판별을 위해 메서드도 같이 보냄
+    serve_static(fd, filename, sbuf.st_size, method);
   } else {  // 동적 컨텐츠인 경우
     if (!(S_ISREG(sbuf.st_mode)) || !(S_IXUSR & sbuf.st_mode)) {  // 일반 파일이 아니거나, 실행 파일이 아니면
       clienterror(fd, filename, "403", "Forbidden", "Tiny couldn't run the CGI program");
       return;
     }
 
-    // 동적 서버에 인자를 같이 보낸다.
-    serve_dynamic(fd, filename, cgiargs);
+    // 동적 서버에 인자를 같이 보낸다. + 메서드 판별을 위해 메서드도 같이 보냄
+    serve_dynamic(fd, filename, cgiargs, method);
   }
 }
 
@@ -201,7 +201,7 @@ int parse_uri(char *uri, char *filename, char *cgiargs) {
   }
 }
 
-void serve_static(int fd, char *filename, int filesize) {
+void serve_static(int fd, char *filename, int filesize, char *method) {
   int srcfd;
   char *srcp, filetype[MAXLINE], buf[MAXBUF];
 
@@ -219,6 +219,10 @@ void serve_static(int fd, char *filename, int filesize) {
   Rio_writen(fd, buf, strlen(buf)); // connfd를 통해서 clientfd에게 보낸다.
   printf("Response header:\n"); // 서버에서도 출력
   printf("%s", buf);
+
+  if (!strcasecmp(method, "HEAD")) {
+    return;
+  }
 
   // 클라이언트에게 응답 바디 보내기
   srcfd = Open(filename, O_RDONLY, 0);  // filename의 이름을 갖는 파일을 읽기 권한으로 불러온다.
@@ -249,7 +253,7 @@ void get_filetype(char *filename, char *filetype) {
 }
 
 // 클라이언트가 원하는 동적 컨텐츠 디렉토리를 받아온다. 응답 라인과 헤더를 작성하고 서버에게 보내면, CGI 자식 프로세스를 fork하고, 그 프로세스의 표준 출력을 클라이언트 출력과 연결한다.
-void serve_dynamic(int fd, char *filename, char *cgiargs) {
+void serve_dynamic(int fd, char *filename, char *cgiargs, char *method) {
   char buf[MAXLINE], *emptylist[] = { NULL };
 
   // return first part of HTTP response
@@ -260,6 +264,8 @@ void serve_dynamic(int fd, char *filename, char *cgiargs) {
 
   if (Fork() == 0) {
     setenv("QUERY_STRING", cgiargs, 1);
+
+    setenv("REQUEST_METHOD", method, 1);
 
     // 클라이언트의 표준 출력을 CGI 프로그램의 표준 출력과 연결한다. 따라서 앞으로 CGI 프로그램에서 printf하면 클라이언트에서 출력된다.
     Dup2(fd, STDOUT_FILENO);
