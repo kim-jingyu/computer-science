@@ -8,6 +8,8 @@
  */
 #include "csapp.h"
 
+#define strcasecmp _stricmp
+
 void doit(int fd);
 void read_requesthdrs(rio_t *rp);
 int parse_uri(char *uri, char *filename, char *cgiargs);
@@ -52,5 +54,57 @@ int main(int argc, char **argv) {
 
     // 서버 연결 식별자를 닫아준다.
     Close(connfd);  // line:netp:tiny:close
+  }
+}
+
+void doit(int fd) {
+  int is_static;
+  struct stat sbuf;
+  char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE]; // 클라이언트에게서 받은 요청
+  char filename[MAXLINE], cgiargs[MAXLINE]; // parse_uri를 통해서 채워진다.
+  rio_t rio;
+
+  // 클라이언트가 rio로 보낸 request 라인과 헤더를 읽고 분석한다.
+  Rio_readinitb(&rio, fd);  // rio 버퍼와 서버의 connfd를 연결시켜준다.
+  Rio_readlineb(&rio, buf, MAXLINE);  // rio에 있는 응답라인 한 줄을 모두 buf로 옮긴다.
+  printf("Request headers:\n");
+  printf("%s", buf);  // 요청 라인 buf = "GET /hi HTTP/1.1\0"을 표준 출력해준다.
+  sscanf(buf, "%s %s %s", method, uri, version);  // buf에서 문자열 3개를 읽어와서 method, uri, version이라는 문자열에 저장한다.
+
+  // 요청 method가 GET이 아니면 종료한다. 즉, main으로 가서 연결을 닫고, 다음 요청을 기다린다.
+  if (strcasecmp(method, "GET")) {
+    clienterror(fd, method, "501", "Not implemented", "Tiny does not implement this method");
+    return;
+  }
+
+  // 요청 라인을 뺀 나머지 요청 헤더들은 무시한다.
+  read_requesthdrs(&rio);
+
+  // 클라이언트 요청 라인에서 받아온 uri를 이용해서 정적/동적 컨텐츠를 구분한다. 정적 컨텐츠면 1이 저장된다.
+  is_static = parse_uri(uri, filename, cgiargs);
+
+  // stat 함수는 file의 상태를 buffer에 넘긴다. 여기서 filename은 클라이언트가 요청한 서버의 컨텐츠 디렉토리 및 파일 이름이다.
+  // 여기서 못넘기면 파일이 없다는 뜻이므로, 404 fail이다.
+  if (stat(filename, &sbuf) < 0) {
+    clienterror(fd, filename, "404", "Not found", "서버에 요청하신 파일이 없습니다.");
+    return;
+  }
+
+  // 컨텐츠의 유형이 정적인지, 동적인지를 파악한 후에 각각의 서버에 보낸다.
+  if (is_static) { // 정적 컨텐츠인 경우
+    if (!(S_ISREG(sbuf.st_mode)) || !(S_IRUSR & sbuf.st_mode)) { // 일반 파일이 아니거나, 읽을 권한이 없으면
+      clienterror(fd, filename, "403", "Forbidden", "권한없는 접근입니다.");
+      return;
+    }
+    // reponse header의 content-length를 위해 정적 서버에 파일의 사이즈를 같이 보낸다
+    serve_static(fd, filename, sbuf.st_size);
+  } else {  // 동적 컨텐츠인 경우
+    if (!(S_ISREG(sbuf.st_mode)) || !(S_IXUSR & sbuf.st_mode)) {  // 일반 파일이 아니거나, 실행 파일이 아니면
+      clienterror(fd, filename, "403", "Forbidden", "권한없는 접근입니다.");
+      return;
+    }
+
+    // 동적 서버에 인자를 같이 보낸다.
+    serve_dynamic(fd, filename, cgiargs);
   }
 }
