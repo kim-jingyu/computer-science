@@ -222,10 +222,13 @@ void serve_static(int fd, char *filename, int filesize) {
 
   // 클라이언트에게 응답 바디 보내기
   srcfd = Open(filename, O_RDONLY, 0);  // filename의 이름을 갖는 파일을 읽기 권한으로 불러온다.
-  srcp = Mmap(0, filesize, PROT_READ, MAP_PRIVATE, srcfd, 0); // 메모리에 파일 내용을 동적 할당한다.
+  // srcp = Mmap(0, filesize, PROT_READ, MAP_PRIVATE, srcfd, 0); // 메모리에 파일 내용을 동적 할당한다.
+  srcp = (char*)Malloc(filesize);   // 파일 크기만큼 메모리를 동적 할당한다.
+  Rio_readn(srcfd, srcp, filesize); // filename 내용을 동적 할당한 메모리에 쓴다.
   Close(srcfd); // 파일을 닫는다.
   Rio_writen(fd, srcp, filesize); // 해당 메모리에 있는 파일 내용들을 fd에 보낸다.(=읽는다)
-  Munmap(srcp, filesize);
+  // Munmap(srcp, filesize);
+  free(srcp);
 }
 
 // Response header의 Conten-Type에 필요한 함수로, filename을 조사해서 각각의 식별자에 맞는 MIME 타입을 filetype에 입력해준다.
