@@ -201,3 +201,30 @@ int parse_uri(char *uri, char *filename, char *cgiargs) {
 
   return 0;
 }
+
+void serve_static(int fd, char *filename, int filesize) {
+  int srcfd;
+  char *srcp, filetype[MAXLINE], buf[MAXBUF];
+
+  // 클라이언트에게 응답 헤더 보내기
+  
+  // 응답 라인과 헤더를 작성한다.
+  get_filetype(filename, filetype); // 파일 타입 찾아오기
+  sprintf(buf, "HTTP/1.0 200 OK\r\n");  // 응답 라인 작성하기
+  sprintf(buf, "%sServer : Tiny Web Server\r\n", buf);  // 응답 헤더 작성하기
+  sprintf(buf, "%sConnection : close\r\n");
+  sprintf(buf, "%sContent-Length : %d\r\n", buf, filesize);
+  sprintf(buf, "%sContent-Type : %s\r\n", buf, filetype);
+
+  // 응답 라인과 헤더를 클라이언트에게 보낸다.
+  Rio_writen(fd, buf, strlen(buf)); // connfd를 통해서 clientfd에게 보낸다.
+  printf("Response header:\n"); // 서버에서도 출력
+  printf("%s", buf);
+
+  // 클라이언트에게 응답 바디 보내기
+  srcfd = Open(filename, O_RDONLY, 0);  // filename의 이름을 갖는 파일을 읽기 권한으로 불러온다.
+  srcp = Mmap(0, filesize, PROT_READ, MAP_PRIVATE, srcfd, 0); // 메모리에 파일 내용을 동적 할당한다.
+  Close(srcfd); // 파일을 닫는다.
+  Rio_writen(fd, srcp, filesize); // 해당 메모리에 있는 파일 내용들을 fd에 보낸다.(=읽는다)
+  Munmap(srcp, filesize);
+}
