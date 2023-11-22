@@ -136,6 +136,31 @@ void doit(int clientfd)
   response_ptr = malloc(content_length);
   Rio_readnb(&response_rio, response_ptr, content_length);
   Rio_writen(clientfd, response_ptr, content_length); // 클라이언트에 Response Body를 전송한다.
+
+  /*
+    caching 2. Client에 응답을 전달할 때, 캐싱이 가능한 크기라면 캐시 연결 리스트에 추가한다.
+    Request header에서 파싱해서 얻어낸 Content-length가 캐싱 가능한 최대 웹 객체의 크기보다 작거나 같으면 웹 객체 구조체를 생성해서 캐시 연결 리스트에 추가한다.
+    만약 연결 리스트에 추가하는 과정에서 최대 캐시 크기를 초과하게 된다면, 사용한지 가장 오래된 웹 객체부터 캐시 리스트의 용량이 충분할 때까지 제거한다. -> write_cache (LRU)
+  */
+
+  // 캐싱이 가능한 크기면 캐시 연결 리스트에 추가한다.
+  if (content_length <= MAX_OBJECT_SIZE)
+  {
+    // web_object 구조체를 생성한다.
+    web_object_t *web_object = (web_object_t *)calloc(1, sizeof(web_object_t));
+    web_object->response_ptr = response_ptr;
+    web_object->content_length = content_length;
+    strcpy(web_object->path, path);
+    // 캐시 연결 리스트에 추가
+    write_cache(web_object);
+  }
+  else
+  {
+    // 캐싱하지 않은 경우에는 그대로 메모리를 반환한다.
+    free(response_ptr);
+  }
+
+  Close(serverfd);
 }
 
 void clienterror(int fd, char *cause, char *errnum, char *shortmsg, char *longmsg)
