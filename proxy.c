@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <signal.h>
 #include "csapp.h"
 #include "cache.h"
 
@@ -226,7 +227,7 @@ void parse_uri(char *uri, char *hostname, char *port, char *path)
   Request Header를 읽고, Server에 전송하는 함수이다.
   필수 헤더가 없는 경우에는 필수 헤더를 추가로 전송한다.
 */
-void read_requesthdrs(rio_t *request_rio, void *request_buf, int serverfd, char *hostname, char *port)
+void read_requsethdrs(rio_t *request_rio, void *request_buf, int serverfd, char *hostname, char *port)
 {
   int is_host_exist;
   int is_connection_exist;
