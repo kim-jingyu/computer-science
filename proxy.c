@@ -49,6 +49,7 @@ int main(int argc, char **argv)
   return 0;
 }
 
+/* 4. Dealing with multiple concurrent requests */
 void *thread(void *vargp)
 {
   int clientfd = *((int *)vargp);
@@ -67,7 +68,7 @@ void doit(int clientfd)
   char *response_ptr, filename[MAXLINE], cgiargs[MAXLINE];
   rio_t request_rio, response_rio;
 
-  /* 클라이언트의 요청을 수신한다. */
+  /* 1. 클라이언트의 요청을 수신한다. */
 
   // Request Line 읽기 [Client -> Proxy]
   Rio_readinitb(&request_rio, clientfd);
@@ -87,6 +88,41 @@ void doit(int clientfd)
     clienterror(clientfd, method, "501", "Not implemented", "Tiny does not implement this method");
     return;
   }
+
+  /* 2. 받은 요청을 End Server에 보낸다. */
+
+  // Request Line 전송 (Proxy -> Server)
+  // Server 소켓 생성
+  serverfd = is_local_test ? Open_clientfd(hostname, port) : Open_clientfd("43.201.84.24", port);
+  if (serverfd < 0)
+  {
+    clienterror(serverfd, method, "502", "Bad Gateway", "Failed : proxy -> end server");
+    return;
+  }
+  Rio_writen(serverfd, request_buf, strlen(request_buf));
+
+  // Request Header 읽기 + 전송 (Client -> Proxy -> Server)
+  read_requsethdrs(&request_rio, request_buf, serverfd, hostname, port);
+
+  /* 3. End Server가 보낸 응답을 받고 Client에 전송한다. */
+
+  // Reponse Header 읽기 + 전송 (Server -> Proxy -> Client). 응답 헤더를 한줄씩 읽으면서 바로 클라이언트에 전송한다.
+  Rio_readinitb(&response_rio, serverfd);
+  while (strcmp(response_buf, "\r\n"))
+  {
+    Rio_readlineb(&response_buf, response_buf, MAXLINE);
+    // Reponse Body 수신에 사용하기 위해 Content-length를 저장한다.
+    if (strstr(response_buf, "Content-length"))
+    {
+      content_length = atoi(strchr(response_buf, ":") + 1);
+    }
+    Rio_writen(clientfd, response_buf, strlen(response_buf));
+  }
+
+  // Response Body 읽기 + 전송 (Server -> Proxy -> Client). 응답 바디는 이진 데이터가 포함될 수 있으므로 한줄씩 읽지않고, Content-length만큼 한번에 읽고, 전송한다.
+  response_ptr = malloc(content_length);
+  Rio_readnb(&response_rio, response_ptr, content_length);
+  Rio_writen(clientfd, response_ptr, content_length); // 클라이언트에 Response Body를 전송한다.
 }
 
 void clienterror(int fd, char *cause, char *errnum, char *shortmsg, char *longmsg)
@@ -146,4 +182,78 @@ void parse_uri(char *uri, char *hostname, char *port, char *path)
 
     strncpy(hostname, hostname_ptr, path_ptr - hostname_ptr);
   }
+}
+
+/*
+  Request Header를 읽고, Server에 전송하는 함수이다.
+  필수 헤더가 없는 경우에는 필수 헤더를 추가로 전송한다.
+*/
+void read_requesthdrs(rio_t *request_rio, void *request_buf, int serverfd, char *hostname, char *port)
+{
+  int is_host_exist;
+  int is_connection_exist;
+  int is_proxy_connection_exist;
+  int is_user_agent_exist;
+
+  // 첫번째 줄 읽기
+  Rio_readlineb(request_rio, request_buf, MAXLINE);
+
+  while (strcmp(request_buf, "\r\n"))
+  {
+    if (strstr(request_buf, "Proxy-Connection") != NULL)
+    {
+      sprintf(request_buf, "Proxy-Connection: close\r\n");
+      is_proxy_connection_exist = 1;
+    }
+    else if (strstr(request_buf, "Connection") != NULL)
+    {
+      sprintf(request_buf, "Connection: close\r\n");
+      is_connection_exist = 1;
+    }
+    else if (strstr(request_buf, "User-Agent") != NULL)
+    {
+      sprintf(request_buf, user_agent_hdr);
+      is_user_agent_exist = 1;
+    }
+    else if (strstr(request_buf, "Host") != NULL)
+    {
+      is_host_exist = 1;
+    }
+
+    // Server에 전송
+    Rio_writen(serverfd, request_buf, strlen(request_buf));
+    // 다음 줄 읽기
+    Rio_readlineb(request_rio, request_buf, MAXLINE);
+  }
+
+  // 필수 헤더 미포함 시, 추가로 전송한다.
+  if (!is_proxy_connection_exist)
+  {
+    sprintf(request_buf, "Proxy-Connection: close\r\n");
+    Rio_writen(serverfd, request_buf, strlen(request_buf));
+  }
+  if (!is_connection_exist)
+  {
+    sprintf(request_buf, "Connection: close\r\n");
+    Rio_writen(serverfd, request_buf, strlen(request_buf));
+  }
+  if (!is_host_exist)
+  {
+    if (!is_local_test)
+    {
+      hostname = "43.201.84.24";
+    }
+    sprintf(request_buf, "Host: %s:%s\r\n", hostname, port);
+    Rio_writen(serverfd, request_buf, strlen(request_buf));
+  }
+  if (!is_user_agent_exist)
+  {
+    sprintf(request_buf, user_agent_hdr);
+    Rio_writen(serverfd, request_buf, strlen(request_buf));
+  }
+
+  // 종료문
+  sprintf(request_buf, "\r\n");
+  Rio_writen(serverfd, request_buf, strlen(request_buf));
+  return;
 }
