@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "csapp.h"
+#include "cache.h"
 
 /* Recommended max cache and object sizes */
 #define MAX_CACHE_SIZE 1049000
@@ -87,6 +88,18 @@ void doit(int clientfd)
   {
     clienterror(clientfd, method, "501", "Not implemented", "Tiny does not implement this method");
     return;
+  }
+
+  /*
+    caching 1. 요청 라인을 읽고나서, 캐싱된 요청(path)인지 확인한다.
+  */
+  web_object_t *cached_object = find_cache(path);
+  // 만약 캐싱되어있다면
+  if (cached_object)
+  {
+    send_cache(cached_object, clientfd); // 캐싱된 객체를 client에 전송한다.
+    read_cache(cached_object);           // 사용한 웹 객체의 순서를 맨 앞으로 갱신한다.
+    return;                              // Server로 요청을 보내지 말고 통신을 종료한다.
   }
 
   /* 2. 받은 요청을 End Server에 보낸다. */
